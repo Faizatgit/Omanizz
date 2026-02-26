@@ -27,7 +27,8 @@
 		</div>
 	@endif
 @endsection
-
+	<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/css/intlTelInput.min.css">
 @section('content')
 	<div class="col-12 col-sm-12 col-md-12 col-lg-12 col-xl-11 col-xxl-10 mx-auto">
 		@php
@@ -133,6 +134,17 @@
 						<div class="d-grid my-4">
 							<button type="submit" id="loginBtn" class="btn btn-primary btn-block">{{ trans('auth.log_in') }}</button>
 						</div>
+
+						{{-- LOGIN WITH OTP BUTTON (TEST) --}}
+						<div class="d-grid mt-2">
+							<button type="button"
+									class="btn btn-outline-dark"
+									data-bs-toggle="modal"
+									data-bs-target="#otpLoginModal">
+								🔐 Login with OTP
+							</button>
+						</div>
+
 					</div>
 				</form>
 			</div>
@@ -143,4 +155,69 @@
 		</p>
 	
 	</div>
+
+<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/intlTelInput.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/utils.js"></script>
 @endsection
+{{-- OTP LOGIN MODAL --}}
+@include('auth.login.partials.otp-login-modal')
+<script>
+let otpIti = null;
+document.addEventListener('shown.bs.modal', function (e) {
+
+    if (e.target.id !== 'otpLoginModal') return;
+
+    const input = document.getElementById('otpPhoneInput');
+    if (!input || otpIti) return;
+
+    otpIti = window.intlTelInput(input, {
+        initialCountry: "{{ strtolower(config('country.code')) }}",
+        separateDialCode: true,
+        utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/utils.js"
+    });
+});
+
+document.getElementById('otpSendForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+	document.getElementById('otpBtn').disabled = true;
+
+    if (!otpIti) {
+        alert('Phone input not initialized');
+        return;
+    }
+
+    if (!otpIti.isValidNumber()) {
+        alert('Please enter a valid phone number');
+        return;
+    }
+
+	document.getElementById('otpPhoneFull').value = otpIti.getNumber();
+
+    fetch(this.action, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('[name=_token]').value,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        },
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success || data.extra?.fieldVerificationSent) {
+            document.getElementById('otpVerifyForm').style.display = 'block';
+            document.getElementById('phoneForVerification').value = otpIti.getNumber();
+            this.style.display = 'none';
+        } else if(data.phoneExists === false) {
+            alert(data.message + '! Please register first.');
+			location.reload();
+        } else{
+            alert(data.message || 'Failed to send OTP');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Something went wrong');
+    });
+});
+</script>

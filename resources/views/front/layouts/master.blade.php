@@ -27,6 +27,8 @@
 <!DOCTYPE html>
 <html lang="{{ $htmlLang }}"{!! $htmlDir . $htmlTheme !!}>
 <head>
+	<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/css/intlTelInput.min.css">
 	<meta charset="{{ config('larapen.core.charset', 'utf-8') }}">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
 	@include('front.common.meta-robots')
@@ -146,6 +148,71 @@
 @show
 
 <main>
+	<div class="navbar-search-wrapper my-2 d-block d-sm-none">
+    <form action="{{ urlGen()->searchWithoutQuery() }}" method="GET" class="navbar-search-form">
+
+        <span class="search-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M21 21L16.65 16.65M11 18C7.134 18 4 14.866 4 11C4 7.134 7.134 4 11 4C14.866 4 18 7.134 18 11C18 14.866 14.866 18 11 18Z"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        </span>
+
+        <input
+            type="text"
+            name="q"
+            value="{{ request('q') }}"
+            class="navbar-search-input"
+            placeholder="Search ads, products, services…"
+            autocomplete="off"
+        >
+
+        <button type="submit" class="navbar-search-btn">
+            Search
+        </button>
+
+    </form>
+</div>
+
+@if (request()->is('/'))
+<section class="home-carousel">
+    <div id="homeCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel">
+
+        <div class="carousel-inner">
+
+            <div class="carousel-item active">
+                <a href="{{ urlGen()->searchWithoutQuery() }}">
+                    <img src="{{ asset('images/1.png') }}" class="carousel-img" alt="Marketplace shopping">
+                </a>
+            </div>
+
+            <div class="carousel-item">
+                <a href="/category/furniture-appliances">
+                    <img src="{{ asset('images/2.png') }}" class="carousel-img" alt="Online selling">
+                </a>
+            </div>
+
+            <div class="carousel-item">
+                <a href="/category/automobiles">
+                    <img src="{{ asset('images/3.png') }}" class="carousel-img" alt="People marketplace">
+                </a>
+            </div>
+
+        </div>
+
+        <button class="carousel-control-prev" type="button" data-bs-target="#homeCarousel" data-bs-slide="prev">
+            <span class="carousel-control-prev-icon"></span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#homeCarousel" data-bs-slide="next">
+            <span class="carousel-control-next-icon"></span>
+        </button>
+
+    </div>
+</section>
+
+
+@endif
+
 	@section('search')
 	@show
 	
@@ -263,5 +330,70 @@
 @if (config('settings.footer.tracking_code'))
 	{!! printJs(config('settings.footer.tracking_code')) . "\n" !!}
 @endif
+@includeWhen(!auth()->check(), 'auth.login.partials.otp-login-modal')
+<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/intlTelInput.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/utils.js"></script>
+
 </body>
 </html>
+
+<script>
+let otpIti = null;
+document.addEventListener('shown.bs.modal', function (e) {
+
+    if (e.target.id !== 'otpLoginModal') return;
+
+    const input = document.getElementById('otpPhoneInput');
+    if (!input || otpIti) return;
+
+    otpIti = window.intlTelInput(input, {
+        initialCountry: "{{ strtolower(config('country.code')) }}",
+        separateDialCode: true,
+        utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/utils.js"
+    });
+});
+
+document.getElementById('otpSendForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+	document.getElementById('otpBtn').disabled = true;
+
+    if (!otpIti) {
+        alert('Phone input not initialized');
+        return;
+    }
+
+    if (!otpIti.isValidNumber()) {
+        alert('Please enter a valid phone number');
+        return;
+    }
+
+	document.getElementById('otpPhoneFull').value = otpIti.getNumber();
+
+    fetch(this.action, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('[name=_token]').value,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        },
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success || data.extra?.fieldVerificationSent) {
+            document.getElementById('otpVerifyForm').style.display = 'block';
+            document.getElementById('phoneForVerification').value = otpIti.getNumber();
+            this.style.display = 'none';
+        } else if(data.phoneExists === false) {
+            alert(data.message + '! Please register first.');
+			location.reload();
+        } else{
+            alert(data.message || 'Failed to send OTP');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Something went wrong');
+    });
+});
+</script>

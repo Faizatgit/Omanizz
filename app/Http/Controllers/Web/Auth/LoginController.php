@@ -24,6 +24,8 @@ use App\Services\Auth\LoginService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Larapen\LaravelMetaTags\Facades\MetaTag;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\JsonResponse;
 
 class LoginController extends FrontController
 {
@@ -154,5 +156,81 @@ class LoginController extends FrontController
 		$message = $message ?? trans('auth.failed');
 		
 		return redirect()->to($this->loginUrl)->withErrors(['error' => $message])->withInput();
+	}
+
+	public function sendOtp(Request $request): JsonResponse
+	{
+		$request->validate([
+			'phone' => 'required'
+		]);
+
+		$data = $this->loginService->sendOtpByPhone($request->phone);
+
+		if(isset($data['phoneExists'])){
+			flash($data['message'])->error();
+			return response()->json([
+				'success'     => false,
+				'phoneExists' => false,
+				'message'     => 'Phone number not found'
+			]);
+		}
+
+		if (
+			isset($data['extra']['fieldVerificationSent']) &&
+			$data['extra']['fieldVerificationSent'] === true
+		) {
+			return response()->json([
+				'success' => true,
+				'stage'   => 'OTP_SENT',
+				'message' => 'OTP sent successfully to your phone number',
+				'data'    => [
+					'phone'       => $data['extra']['fieldValue'],
+					'resendUrl'   => $data['extra']['resendUrl'],
+					'resendLocked'=> $data['extra']['resendLocked'],
+				]
+			]);
+		}
+
+		if(isset($data['message'])){
+		flash($data['message'])->success();
+		}
+		return response()->json([
+			'success' => false,
+			'stage'   => 'OTP_NOT_SENT',
+			'message' => $data['message'],
+		]);
+	}
+
+	public function verifyOtp(Request $request): RedirectResponse
+	{
+		$request->validate([
+			'phone' => 'required',
+			'otp'   => 'required',
+		]);
+
+		$data = $this->loginService->verifyOtpForLogin(
+			$request->phone,
+			$request->otp,
+			$request->_token
+		);
+
+		if (!$data['success']) {
+			return back()->withErrors([
+				'otp' => $data['message']
+			]);
+		}
+		
+		return $this->createNewSession([
+			'success' => true,
+			'message' => trans('auth.login_successful'),
+			'result'  => [
+				'id' => data_get($data, 'user.id')
+			],
+			'extra' => [
+				'authToken' => data_get($data, 'token'),
+				'isAdmin'   => data_get($data, 'user.is_admin', false),
+			],
+		]);
+
 	}
 }

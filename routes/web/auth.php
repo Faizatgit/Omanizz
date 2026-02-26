@@ -43,6 +43,17 @@ Route::middleware(['guest', 'no.http.cache'])
 				Route::get('login', 'showForm')->name('auth.login.showForm');
 				Route::post('login', 'postForm')->name('auth.login.postForm');
 			});
+
+		// Login with OTP Routes...
+		Route::controller(LoginController::class)
+			->middleware(['guest'])
+			->group(function () {
+				Route::post('login/otp/send', 'sendOtp')
+					->name('auth.login.otp.send');
+
+				Route::post('login/otp/verify', 'verifyOtp')
+					->name('auth.login.otp.verify');
+			});
 		
 		// Password Forgot Routes...
 		Route::controller(ForgotPasswordController::class)

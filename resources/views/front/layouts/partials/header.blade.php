@@ -101,6 +101,7 @@
 	$defaultHeaderItemShadowClass = $isDefaultHeaderItemShadowEnabled ? " {$textShadowClass}" : '';
 @endphp
 @pushonce('before_scripts_stack')
+
 	<script>
 		if (typeof window.headerOptions === 'undefined') {
 			window.headerOptions = {};
@@ -143,6 +144,7 @@
 		};
 	</script>
 @endpushonce
+<link href="{{ url()->asset('dist/front/custom.css') . getPictureVersion() }}" rel="stylesheet">
 <header{!! $defaultHeaderThemeAttr !!}>
 	<nav class="navbar {{ $defaultCssClasses }} navbar-expand-xl" role="navigation" id="mainNavbar" style="{{ $defaultStyle }}">
 		<div class="{{ $defaultContainerCssClasses }}" id="mainNavbarContainer">
@@ -202,6 +204,36 @@
 						@endif
 					@endif
 				</ul>
+<div class="navbar-search-wrapper mx-xl-3 my-2 my-xl-0 d-none d-sm-block">
+    <form action="{{ urlGen()->searchWithoutQuery() }}" method="GET" class="navbar-search-form">
+        
+        {{-- Search Icon --}}
+        <span class="search-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M21 21L16.65 16.65M11 18C7.134 18 4 14.866 4 11C4 7.134 7.134 4 11 4C14.866 4 18 7.134 18 11C18 14.866 14.866 18 11 18Z"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        </span>
+
+        {{-- Input --}}
+        <input
+            type="text"
+            name="q"
+            value="{{ request('q') }}"
+            class="navbar-search-input"
+            placeholder="Search ads, products, services…"
+            autocomplete="off"
+        >
+
+        {{-- Button --}}
+        <button type="submit" class="navbar-search-btn">
+            Search
+        </button>
+
+    </form>
+</div>
+
+
 				
 				<ul class="navbar-nav ms-auto">
 					@include('front.layouts.partials.navs.menus.header')
@@ -222,7 +254,17 @@
 							'linkColorClass' => $defaultLinkColorClass,
 						])
 					@endif
-					
+
+					@guest
+					<li class="nav-item ms-2">
+						<button type="button"
+								class="btn btn-outline-dark btn-sm"
+								data-bs-toggle="modal"
+								data-bs-target="#otpLoginModal">
+							🔐 Login with OTP
+						</button>
+					</li>
+					@endguest			
 					{{-- Languages Dropdown/Modal Link --}}
 					@include('front.layouts.partials.navs.languages')
 					

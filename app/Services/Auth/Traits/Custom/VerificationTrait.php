@@ -24,6 +24,7 @@ use App\Services\Auth\Traits\Custom\Verification\Metadata;
 use App\Services\Auth\Traits\Custom\Verification\PhoneVerificationTrait;
 use App\Services\Auth\Traits\Custom\Verification\VerificationExtraData;
 use Illuminate\Http\JsonResponse;
+use App\Models\User;
 
 trait VerificationTrait
 {
@@ -152,6 +153,95 @@ trait VerificationTrait
 		
 		return apiResponse()->json($data);
 	}
+
+/**
+ * Verify OTP for Login (Repeatable)
+ *
+ * @param string $field email|phone
+ * @param string $otp
+ * @param array  $params
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function verifyOtpCodeForLogin(
+    string $field,
+    string $otp,
+    array $params = []
+): JsonResponse {
+
+    if (empty($otp)) {
+        return apiResponse()->error(trans('auth.verification_token_or_code_missing'));
+    }
+
+    $deviceName = $params['deviceName'] ?? null;
+
+    /**
+     * ----------------------------------
+     * Find user with valid OTP
+     * ----------------------------------
+     */
+    $user = User::query()
+        ->where('phone_token', $otp)
+        ->where('otp_expires_at', '>=', now())
+        ->whereNull('locked_at')
+        ->first();
+
+    if (!$user) {
+        return apiResponse()->error(trans('auth.invalid_or_expired_otp'));
+    }
+
+    /**
+     * ----------------------------------
+     * OTP Verified → Login
+     * ----------------------------------
+     */
+
+    // Mark email/phone verified (only first time)
+    if ($field === 'email' && empty($user->email_verified_at)) {
+        $user->email_verified_at = now();
+    }
+
+    if ($field === 'phone' && empty($user->phone_verified_at)) {
+        $user->phone_verified_at = now();
+    }
+
+    // Clear OTP after successful login
+    $user->two_factor_otp = null;
+    $user->otp_expires_at = null;
+    $user->total_login_attempts = 0;
+    $user->last_login_at = now();
+    $user->save();
+
+    /**
+     * ----------------------------------
+     * Response Data
+     * ----------------------------------
+     */
+    $data = [];
+    $data['success'] = true;
+    $data['message'] = trans('auth.login_successful');
+    $data['result'] = new UserResource($user, $params);
+
+    /**
+     * ----------------------------------
+     * API Token (Mobile / SPA)
+     * ----------------------------------
+     */
+        $defaultDeviceName = doesRequestIsFromWebClient()
+            ? 'Website'
+            : 'Mobile App';
+
+        $deviceName = $deviceName ?? $defaultDeviceName;
+
+        $token = $user->createToken($deviceName);
+
+        $data['extra'] = [
+            'authToken' => $token->plainTextToken,
+            'tokenType' => 'Bearer',
+        ];
+
+    return apiResponse()->json($data);
+}
+
 	
 	/**
 	 * Verification (Forgot Password)

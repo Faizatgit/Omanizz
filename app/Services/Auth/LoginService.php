@@ -21,17 +21,18 @@ use App\Models\Scopes\VerifiedScope;
 use App\Models\User;
 use App\Services\Auth\App\Http\Requests\LoginRequest;
 use App\Services\Auth\Traits\Custom\CreateLoginToken;
-use App\Services\Auth\Traits\Custom\TwoFactorCode;
+use App\Services\Auth\Traits\Custom\Verification\PhoneVerificationTrait;
 use App\Services\Auth\Traits\System\AuthenticatesUsers;
 use App\Services\BaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Throwable;
+use App\Services\VerificationService;
 
 class LoginService extends BaseService
 {
 	use AuthenticatesUsers;
-	use TwoFactorCode, CreateLoginToken;
+	use PhoneVerificationTrait, CreateLoginToken;
 	
 	protected int $maxAttempts;
 	protected int $decayMinutes;
@@ -192,4 +193,72 @@ class LoginService extends BaseService
 		
 		return apiResponse()->success(trans('auth.logout_successful'));
 	}
+
+public function sendOtpByPhone(string $phone)
+{
+    $phone = preg_replace('/\s+/', '', $phone);
+
+    /** @var User|null $user */
+    $user = User::where('phone', $phone)->first();
+
+    if (!$user) {
+        return [
+			'phoneExists' => false, 
+			'message' => 'Phone number not found'
+		];
+    }
+    // Generate OTP using same infra as registration
+    $user->generatePhoneToken('users');
+
+    // Send OTP SMS
+    $data = $this->sendPhoneVerification(
+        'users',
+        $user,
+        false // no flash message
+    );
+
+    return $data;
+}
+
+public function verifyOtpForLogin(string $phone, string $otp, string $token): array
+{
+    // Normalize phone
+    $phone = preg_replace('/\s+/', '', $phone);
+
+    /** @var User $user */
+    $user = User::where('phone', $phone)->first();
+
+    if (!$user) {
+        return [
+            'success' => false,
+            'message' => 'Invalid phone number',
+        ];
+    }
+
+    // Call EXISTING verification engine
+    $verificationService = new VerificationService();
+
+    $response = getServiceData(
+        $verificationService->verifyOtpCodeForLogin(
+            'phone',        // field
+            $otp,           // OTP
+            ['deviceName' => 'Website']
+        )
+    );
+
+    if (!data_get($response, 'success')) {
+        return [
+            'success' => false,
+            'message' => data_get($response, 'message', 'Invalid or expired OTP'),
+        ];
+    }
+
+    return [
+        'success' => true,
+        'user'    => data_get($response, 'result'),
+        'token'   => data_get($response, 'extra.authToken'),
+    ];
+}
+
+
 }
